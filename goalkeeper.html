@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ball & Goal with Goalkeeper</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #f0f0f0;
+    }
+    canvas {
+      border: 2px solid #000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // — Assets & error logging —
+    const grass = new Image();
+    grass.src = 'grass.png';
+    grass.onerror = () => console.error('⚠️ Failed to load grass.png');
+
+    const shoe = new Image();
+    shoe.src = 'shoes.png';
+    shoe.onerror = () => console.error('⚠️ Failed to load shoe.png');
+
+    const keeper = new Image();
+    keeper.src = 'goalkeeper.png';
+    keeper.onerror = () => console.error('⚠️ Failed to load goalkeeper.png');
+    // — Game objects —
+    let ballRadius = 20;
+    let ballX = canvas.width / 2;
+    let ballY = canvas.height - 100;
+    let ballSpeedX = 0, ballSpeedY = 0;
+    const ballMaxSpeed = 12;
+
+    const goalWidth = 100, goalHeight = 20;
+    const goalX = (canvas.width - goalWidth) / 2, goalY = 20;
+
+    const shoeWidth = 60, shoeHeight = 60;
+    let shoeX = canvas.width / 2 - shoeWidth / 2;
+    let shoeY = canvas.height - shoeHeight - 10;
+    const shoeSpeed = 7;
+
+    // — Goalkeeper —
+    let keeperWidth = 80, keeperHeight = 20;
+    let keeperX = (canvas.width - keeperWidth) / 2;
+    const keeperY = goalY;
+    let keeperSpeed = 3;  // Base speed of goalkeeper
+    let keeperDirection = 1;  // Direction of goalkeeper movement (1 = right, -1 = left)
+
+    // — Input state —
+    let leftPressed = false,
+        rightPressed = false,
+        upPressed = false,
+        downPressed = false,
+        spacePressed = false;
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft')  leftPressed = true;
+      if (e.key === 'ArrowRight') rightPressed = true;
+      if (e.key === 'ArrowUp')    upPressed = true;
+      if (e.key === 'ArrowDown')  downPressed = true;
+      if (e.key === ' ' || e.key === 'Spacebar') spacePressed = true;
+    });
+    document.addEventListener('keyup', e => {
+      if (e.key === 'ArrowLeft')  leftPressed = false;
+      if (e.key === 'ArrowRight') rightPressed = false;
+      if (e.key === 'ArrowUp')    upPressed = false;
+      if (e.key === 'ArrowDown')  downPressed = false;
+      if (e.key === ' ' || e.key === 'Spacebar') spacePressed = false;
+    });
+
+    // — Drawing —
+    function drawBackground() {
+      if (grass.complete && grass.naturalWidth) {
+        ctx.drawImage(grass, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#76b852';  // fallback green
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    function drawGoal() {
+      ctx.fillStyle = '#00AA00';
+      ctx.fillRect(goalX, goalY, goalWidth, goalHeight);
+    }
+
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#FF0000';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawShoe() {
+      if (shoe.complete && shoe.naturalWidth) {
+        ctx.drawImage(shoe, shoeX, shoeY, shoeWidth, shoeHeight);
+      } else {
+        ctx.fillStyle = '#333';  // fallback placeholder
+        ctx.fillRect(shoeX, shoeY, shoeWidth, shoeHeight);
+      }
+    }
+
+    function drawGoalKeeper() {
+      if (keeper.complete && keeper.naturalWidth) {
+        ctx.drawImage(keeper, keeperX, keeperY, keeperWidth, keeperHeight);
+      } else {
+        ctx.fillStyle = '#0000FF';  // fallback placeholder
+        ctx.fillRect(keeperX, keeperY, keeperWidth, keeperHeight);
+      }
+    }
+    // — Goalkeeper Movement —
+    function moveGoalkeeper() {
+      // Randomly change direction for difficulty
+      if (Math.random() < 0.02) keeperDirection *= -1;  // Change direction randomly for difficulty
+
+      keeperX += keeperDirection * keeperSpeed;
+
+      // Prevent goalkeeper from going outside the goal area
+      if (keeperX < goalX) keeperX = goalX;
+      if (keeperX + keeperWidth > goalX + goalWidth) keeperX = goalX + goalWidth - keeperWidth;
+    }
+
+    // — Logic —
+    function moveShoe() {
+      if (leftPressed   && shoeX > 0)                   shoeX -= shoeSpeed;
+      if (rightPressed  && shoeX + shoeWidth < canvas.width)  shoeX += shoeSpeed;
+      if (upPressed     && shoeY > 0)                   shoeY -= shoeSpeed;
+      if (downPressed   && shoeY + shoeHeight < canvas.height) shoeY += shoeSpeed;
+    }
+
+    function shoeHitsBall() {
+      return (
+        ballX + ballRadius > shoeX &&
+        ballX - ballRadius < shoeX + shoeWidth &&
+        ballY + ballRadius > shoeY &&
+        ballY - ballRadius < shoeY + shoeHeight
+      );
+    }
+
+    function maybeKick() {
+      if (spacePressed && shoeHitsBall()) {
+        const dx = ballX - (shoeX + shoeWidth / 2);
+        const dy = ballY - (shoeY + shoeHeight / 2);
+        const dist = Math.hypot(dx, dy) || 1;
+        const scaledSpeed = dist / 10;
+
+        ballSpeedX = (dx / dist) * scaledSpeed;
+        ballSpeedY = (dy / dist) * scaledSpeed;
+      }
+    }
+
+    function updateBall() {
+      ballX += ballSpeedX;
+      ballY += ballSpeedY;
+      ballSpeedX *= 0.98;
+      ballSpeedY *= 0.98;
+      ballX = Math.min(Math.max(ballX, ballRadius), canvas.width - ballRadius);
+      ballY = Math.min(Math.max(ballY, ballRadius), canvas.height - ballRadius);
+    }
+
+    function checkGoal() {
+      if (
+        ballX > goalX && ballX < goalX + goalWidth &&
+        ballY > goalY && ballY < goalY + goalHeight
+      ) {
+        setTimeout(() => alert('🎉 Goal! You scored!'), 10);
+        ballX = canvas.width / 2;
+        ballY = canvas.height - 100;
+        ballSpeedX = ballSpeedY = 0;
+      }
+    }
+
+    // — Goalkeeper vs Ball Collision —
+    function goalkeeperCollision() {
+      if (
+        ballX + ballRadius > keeperX &&
+        ballX - ballRadius < keeperX + keeperWidth &&
+        ballY + ballRadius > keeperY &&
+        ballY - ballRadius < keeperY + keeperHeight
+      ) {
+        // Ball is blocked by goalkeeper
+        ballSpeedX = 0;
+        ballSpeedY = 0;
+        ballX = keeperX + keeperWidth + ballRadius; // Place ball near the keeper after block
+      }
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBackground();
+      drawGoal();
+      drawBall();
+      drawShoe();
+      drawGoalKeeper();
+      moveShoe();
+      maybeKick();
+      updateBall();
+      checkGoal();
+      moveGoalkeeper();
+      goalkeeperCollision();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('load', loop);
+  </script>
+</body>
+</html>
